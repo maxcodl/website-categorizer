@@ -7,26 +7,19 @@ import path, { dirname } from "path";
 import { fileURLToPath } from "url";
 import keywords from "./files/categoriesKeywords.json" assert { type: "json" };
 import cors from "cors";
-
 const openaiInstance = new openai({
   apiKey: "sk-6jhjklhsdvjkUIY87875789589578igiugt878wlh5",
 });
-
 const app = express();
 const port = 3000;
-
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.get("/", (req, res) => {
-  res.send(`
-    <form action="/categorize" method="post">
-      <label for="url">Enter a URL to categorize:</label><br>
-      <input type="text" id="url" name="url"><br>
-      <input type="submit" value="Submit">
-    </form> 
-  `);
-});
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const pagePath = path.join(__dirname, "./views/index.html");
 
 app.post("/categorize", async (req, res) => {
   let url = req.body.url;
@@ -48,9 +41,6 @@ app.post("/categorize", async (req, res) => {
     res.status(500).json({ error: "Internal server error." });
   }
 });
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 function getKeywordsFromFile() {
   const filePath = path.join(__dirname, "./files/words.txt");
