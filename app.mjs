@@ -93,15 +93,12 @@ async function generateOpenAIResponse(text) {
     });
 
     let responseText = "";
-    if (
-      response.choices &&
-      response.choices[0] &&
-      response.choices[0].message
-    ) {
+    if (response.choices && response.choices[0] && response.choices[0].message) {
       responseText = response.choices[0].message.content;
     }
 
-    return JSON.parse(responseText);
+    return responseText;
+
   } catch (error) {
     console.error("Error generating OpenAI response:", error);
     return "Error generating response.";
