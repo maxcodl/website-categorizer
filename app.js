@@ -75,7 +75,7 @@ async function generateOpenAIResponse(text) {
       {
         headers: {
           "Content-Type": "application/json",
-          Authorization: "Bearer sk-jdbfksdjfi7dsf9sd7ft9sdgbfidsbfdfdsfsrnk", // Replace with your OpenAI API key
+          Authorization: "Bearer sk-jdbfksdjfi7dsf9sd7ft9sdgbfidsbfdfdsfsrnk",
         },
       }
     );
