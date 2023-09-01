@@ -19,8 +19,9 @@ app.use(express.urlencoded({ extended: true }));
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const pagePath = path.join(__dirname, "./views/index.html");
-
+const pagePath = path.join(__dirname, "./public/index.html");
+app.use(express.static("public"));
+app.get("/", (req, res) => res.sendFile(pagePath));
 app.post("/categorize", async (req, res) => {
   let url = req.body.url;
 
