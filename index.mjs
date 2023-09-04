@@ -5,7 +5,6 @@ import openai from "openai";
 import fs from "fs";
 import path, { dirname } from "path";
 import { fileURLToPath } from "url";
-import keywords from "./files/categoriesKeywords.json" assert { type: "json" };
 import cors from "cors";
 import dotenv from "dotenv";
 
@@ -34,7 +33,7 @@ app.post("/categorize", async (req, res) => {
   if (!url.includes("http://") && !url.includes("https://")) {
     url = "https://www." + url;
   }
-  console.log("Received URL:", url); // Add this line for debugging
+  console.log("Received URL:", url);
 
   if (!url) {
     return res.status(400).json({ error: "No URL provided." });
@@ -42,7 +41,8 @@ app.post("/categorize", async (req, res) => {
 
   try {
     const result = await main(url);
-    res.json(result);
+    const finalResponse = JSON.parse(result.finalOpenAIResponse);
+    res.json(finalResponse);
   } catch (error) {
     console.error("Error categorizing website:", error);
     res.status(500).json({ error: "Internal server error." });
@@ -50,9 +50,9 @@ app.post("/categorize", async (req, res) => {
 });
 
 function getKeywordsFromFile() {
-  const filePath = path.join(__dirname, "./files/words.txt");
+  const filePath = path.join(__dirname, "./files/keywords.json");
   const data = fs.readFileSync(filePath, "utf8");
-  return data.split("\n");
+  return JSON.parse(data);
 }
 
 function readPromptFromFile() {
@@ -60,6 +60,12 @@ function readPromptFromFile() {
   const data = fs.readFileSync(filePath, "utf8");
   const promptData = JSON.parse(data);
   return promptData.prompt;
+}
+
+function readCategoriesFromFile() {
+  const filePath = path.join(__dirname, "./files/Categories.json");
+  const data = fs.readFileSync(filePath, "utf8");
+  return JSON.parse(data);
 }
 
 const fileKeywords = getKeywordsFromFile();
@@ -76,40 +82,43 @@ async function extractTextFromURL(url) {
     const $ = cheerio.load(html);
 
     const allowedTags = ["p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "span"];
-    const extractedTexts = allowedTags.map((tag) => $(tag).text());
+    let extractedTexts = [];
+    allowedTags.forEach((tag) => {
+      $(tag).each((i, el) => {
+        extractedTexts.push($(el).text());
+      });
+    });
 
     const joinedText = extractedTexts.join(" ");
     const trimmedText = joinedText.replace(/\s+/g, " ").trim();
-
     console.log("Extracted text:", trimmedText);
-    return trimmedText;
+    const matchedKeywords = fileKeywords.filter((keyword) => {
+      const regex = new RegExp(`\\b${keyword}\\b`, "i");
+      return regex.test(trimmedText);
+    });
+    console.log("Matched keywords:", matchedKeywords);
+    return { text: trimmedText, matchedKeywords };
   } catch (error) {
     console.error("Error extracting text from website:", error);
     return "";
   }
 }
 
-function categorizeWebsite(text) {
-  const categoryCounts = {};
+function countKeywords(text, keywords) {
+  const wordArray = text.split(" ");
+  const keywordCounts = {};
 
-  for (const category in keywords) {
-    const categoryKeywords = keywords[category];
-    const matchedKeywords = categoryKeywords.filter((keyword) =>
-      text.includes(keyword)
-    );
-    if (matchedKeywords.length >= 3) {
-      categoryCounts[category] = matchedKeywords.length;
+  keywords.forEach((keyword) => {
+    const count = wordArray.reduce((total, word) => {
+      return total + (word.toLowerCase() === keyword.toLowerCase() ? 1 : 0);
+    }, 0);
+
+    if (count > 1) {
+      keywordCounts[keyword] = count;
     }
-  }
+  });
 
-  if (Object.keys(categoryCounts).length > 0) {
-    const bestCategory = Object.keys(categoryCounts).reduce((a, b) =>
-      categoryCounts[a] > categoryCounts[b] ? a : b
-    );
-    return bestCategory;
-  }
-
-  return null;
+  return keywordCounts;
 }
 
 function updatePromptTemplate(url, content) {
@@ -143,33 +152,89 @@ async function generateOpenAIResponse(text) {
   }
 }
 
-async function main(url) {
-  const extractedText = await extractTextFromURL(url);
-  const category = categorizeWebsite(extractedText);
-  let result;
+async function generateOpenAIResponseforwebsitePrompt(text) {
+  try {
+    console.log("The text sent to OpenAI: ", text);
+    const response = await openaiInstance.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [{ role: "user", content: text }],
+    });
 
-  if (category) {
-    console.log(`Website categorized as: ${category}`);
-    const matchedKeywords = keywords[category].filter((keyword) =>
-      extractedText.includes(keyword)
-    );
+    let responseText = "";
+    if (
+      response.choices &&
+      response.choices[0] &&
+      response.choices[0].message
+    ) {
+      responseText = response.choices[0].message.content;
+    }
+
+    console.log("OpenAI Response for website prompt: ", responseText);
+    return responseText;
+  } catch (error) {
+    console.error("Error generating OpenAI response:", error);
+    return "Error generating response.";
+  }
+}
+
+function readWebsitePromptFromFile() {
+  const filePath = path.join(__dirname, "./files/websitePrompt.json");
+  const data = fs.readFileSync(filePath, "utf8");
+  const promptData = JSON.parse(data);
+  return promptData.prompt;
+}
+
+function updateWebsitePromptTemplate(inputResult) {
+  let prompt = readWebsitePromptFromFile();
+  prompt = prompt.replace("{{input_result}}", JSON.stringify(inputResult));
+  return prompt;
+}
+
+async function main(url) {
+  const { text: extractedText, matchedKeywords } = await extractTextFromURL(
+    url
+  );
+  const keywordCounts = countKeywords(extractedText, matchedKeywords);
+
+  console.log("Keyword counts:", keywordCounts);
+
+  const categories = readCategoriesFromFile();
+  const matchedCategories = categories.filter((category) =>
+    matchedKeywords.includes(category.split("/").pop().split(" & ")[0])
+  );
+
+  let result;
+  if (matchedKeywords.length >= 3 && matchedCategories.length > 0) {
+    console.log(`Website matched keywords: ${matchedKeywords}`);
+    console.log(`Website matched categories: ${matchedCategories}`);
     result = {
       url,
-      category,
       matchedKeywords,
+      matchedCategories,
     };
   } else {
     const updatedPrompt = updatePromptTemplate(url, extractedText);
     const openaiResponse = await generateOpenAIResponse(updatedPrompt);
-    // pack the result to return
+    const keywordCounts = countKeywords(extractedText, matchedKeywords);
+    console.log("Keyword counts:", keywordCounts);
     result = {
       url,
-      category: "Unable to categorize. OpenAI Response: ",
+      message: "Unable to categorize. OpenAI Response: ",
       openaiResponse,
     };
-    console.log(result.category, openaiResponse);
+    console.log(result.message, openaiResponse);
   }
-  return result; // returns the result
+
+  const updatedWebsitePrompt = updateWebsitePromptTemplate(result);
+  const finalOpenAIResponse = await generateOpenAIResponseforwebsitePrompt(
+    updatedWebsitePrompt
+  );
+
+  console.log("Final OpenAI response: ", finalOpenAIResponse);
+
+  result.finalOpenAIResponse = finalOpenAIResponse;
+
+  return result;
 }
 
 app.listen(port, () => {

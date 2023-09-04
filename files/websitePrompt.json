@@ -1,0 +1,3 @@
+{
+  "prompt": "Given the input data below, extract and categorize the relevant information to determine the primary category and confidence level for the provided URL: Input data {{input_result}}: Please provide the extracted category with its confidence level for the given URL in a JSON format.\n{\n  \"domain\": {\n    \"categories\": [\n      {\n        \"confidence\": num,\n        \"name\": \"/category\",\n        \"IAB12\": \"category\"\n      }\n    ],\n    \"domain_url\": \"samplewebsite.com\"\n  }\n}"
+}
