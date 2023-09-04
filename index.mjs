@@ -7,9 +7,15 @@ import path, { dirname } from "path";
 import { fileURLToPath } from "url";
 import keywords from "./files/categoriesKeywords.json" assert { type: "json" };
 import cors from "cors";
+import dotenv from "dotenv";
+
+dotenv.config();
+
+// Now, you can access the API key using process.env.OPENAI_API_KEY
 const openaiInstance = new openai({
-  apiKey: "sk-6jhjklhsdvjkUIY87875789589578igiugt878wlh5",
+  apiKey: process.env.OPENAI_API_KEY,
 });
+
 const app = express();
 const port = 3000;
 app.use(cors());
