@@ -99,8 +99,13 @@ async function extractTextFromURL(url) {
     console.log("Matched keywords:", matchedKeywords);
     return { text: trimmedText, matchedKeywords };
   } catch (error) {
-    console.error("Error extracting text from website:", error);
-    return "";
+    if (error.code === "CERT_HAS_EXPIRED") {
+      console.error("Error extracting text from website");
+      return { text: "", matchedKeywords: [] }; // Return an empty string and empty array
+    } else {
+      console.error("Error extracting text from website:", error);
+      throw error; // Re-throw the error if it's not the "certificate has expired" error
+    }
   }
 }
 
