@@ -1,4 +1,4 @@
-/* styles.css */
+  /* styles.css */
 
 /* General Styles */
 body {
@@ -90,4 +90,10 @@ input[type="submit"] {
 .submit-btn {
   padding: 10px 20px;
   font-size: 16px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.submit-btn span {
+  margin-right: 10px;
 }
