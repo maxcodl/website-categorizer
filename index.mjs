@@ -301,7 +301,7 @@ async function main(url) {
       matchedCategories,
     };
   } else {
-    const first100Words = firstXWords(extractedText, 100);
+    const first100Words = firstXWords(extractedText, 200);
     const updatedPrompt = updatePromptTemplate(url, first100Words);
     const openaiResponse = await generateOpenAIResponse(updatedPrompt);
     const keywordCounts = countKeywords(extractedText, matchedKeywords);
@@ -315,7 +315,7 @@ async function main(url) {
     console.log(result.message, openaiResponse);
   }
 
-  const first100Words = firstXWords(extractedText, 100);
+  const first100Words = firstXWords(extractedText, 200);
   const updatedWebsitePrompt = updateWebsitePromptTemplate(
     result,
     first100Words
