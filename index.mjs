@@ -41,8 +41,13 @@ app.post("/categorize", async (req, res) => {
 
   try {
     const result = await main(url);
-    const finalResponse = JSON.parse(result.finalOpenAIResponse);
-    res.json(finalResponse);
+    if ("finalOpenAIResponse" in result) {
+      console.log(result.finalOpenAIResponse);
+      const finalResponse = JSON.parse(result.finalOpenAIResponse);
+      res.json(finalResponse);
+    } else {
+      res.json(result);
+    }
   } catch (error) {
     console.error("Error categorizing website:", error);
     res.status(500).json({ error: "Internal server error." });
@@ -68,6 +73,26 @@ function readCategoriesFromFile() {
   return JSON.parse(data);
 }
 
+function readIABFromFile() {
+  const filePath = path.join(__dirname, "./files/IAB.json");
+  const data = fs.readFileSync(filePath, "utf8");
+  return JSON.parse(data);
+}
+
+function findIABCategory(categoryName) {
+  const IABData = readIABFromFile();
+  // Remove any leading "/" from the category name
+  const formattedCategoryName = categoryName.startsWith("/")
+    ? categoryName.slice(1)
+    : categoryName;
+  const foundCategory = IABData.find(
+    (data) =>
+      data["CATEGORY NAME"].toLowerCase() ===
+      formattedCategoryName.toLowerCase()
+  );
+  return foundCategory ? foundCategory.VALUE : null;
+}
+
 const fileKeywords = getKeywordsFromFile();
 
 async function extractTextFromURL(url) {
@@ -91,12 +116,12 @@ async function extractTextFromURL(url) {
 
     const joinedText = extractedTexts.join(" ");
     const trimmedText = joinedText.replace(/\s+/g, " ").trim();
-    console.log("Extracted text:", trimmedText);
+    // console.log("Extracted text:", trimmedText);
     const matchedKeywords = fileKeywords.filter((keyword) => {
       const regex = new RegExp(`\\b${keyword}\\b`, "i");
       return regex.test(trimmedText);
     });
-    console.log("Matched keywords:", matchedKeywords);
+    // console.log("Matched keywords:", matchedKeywords);
     return { text: trimmedText, matchedKeywords };
   } catch (error) {
     if (error.code === "CERT_HAS_EXPIRED") {
@@ -135,7 +160,7 @@ function updatePromptTemplate(url, content) {
 
 async function generateOpenAIResponse(text) {
   try {
-    console.log("The text sent to OpenAI: ", text);
+    // console.log("The text sent to OpenAI: ", text);
     const response = await openaiInstance.chat.completions.create({
       model: "gpt-3.5-turbo",
       messages: [{ role: "user", content: text }],
@@ -159,10 +184,31 @@ async function generateOpenAIResponse(text) {
 
 async function generateOpenAIResponseforwebsitePrompt(text) {
   try {
-    console.log("The text sent to OpenAI: ", text);
+    // console.log("The text sent to OpenAI: ", text);
     const response = await openaiInstance.chat.completions.create({
       model: "gpt-3.5-turbo",
-      messages: [{ role: "user", content: text }],
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert in website categorization.",
+        },
+        {
+          role: "user",
+          content:
+            'Given the input data below, extract and categorize the relevant information to determine the primary category and confidence level for the provided URL: Input data {{cnn.com}}: Please provide the extracted category with its confidence level for the given URL in a JSON format.{"domain": {"categories": [{"confidence": "confidence number","name": "category","IAB category": "category"],"domain_url": "samplewebsite.com"}}',
+        },
+        {
+          role: "assistant",
+          content:
+            '{"domain": {"categories": [{"confidence": "0.99", "name": "IAB_category", "/News": "News"}], "domain_url": "https://www.cnn.com/"}}',
+        },
+        { role: "user", content: text },
+      ],
+      temperature: 1,
+      max_tokens: 100,
+      top_p: 1,
+      frequency_penalty: 0,
+      presence_penalty: 0,
     });
 
     let responseText = "";
@@ -174,7 +220,7 @@ async function generateOpenAIResponseforwebsitePrompt(text) {
       responseText = response.choices[0].message.content;
     }
 
-    console.log("OpenAI Response for website prompt: ", responseText);
+    // console.log("OpenAI Response for website prompt: ", responseText);
     return responseText;
   } catch (error) {
     console.error("Error generating OpenAI response:", error);
@@ -201,7 +247,7 @@ async function main(url) {
   );
   const keywordCounts = countKeywords(extractedText, matchedKeywords);
 
-  console.log("Keyword counts:", keywordCounts);
+  // console.log("\nKeyword counts:", keywordCounts);
 
   const categories = readCategoriesFromFile();
   const matchedCategories = categories.filter((category) =>
@@ -210,8 +256,8 @@ async function main(url) {
 
   let result;
   if (matchedKeywords.length >= 3 && matchedCategories.length > 0) {
-    console.log(`Website matched keywords: ${matchedKeywords}`);
-    console.log(`Website matched categories: ${matchedCategories}`);
+    // console.log(`\n\nWebsite matched keywords: ${matchedKeywords}`);
+    // console.log(`\n\nWebsite matched categories: ${matchedCategories}`);
     result = {
       url,
       matchedKeywords,
@@ -221,13 +267,14 @@ async function main(url) {
     const updatedPrompt = updatePromptTemplate(url, extractedText);
     const openaiResponse = await generateOpenAIResponse(updatedPrompt);
     const keywordCounts = countKeywords(extractedText, matchedKeywords);
-    console.log("Keyword counts:", keywordCounts);
+    // console.log("\n\nKeyword counts:", keywordCounts);
     result = {
       url,
       message: "Unable to categorize. OpenAI Response: ",
       openaiResponse,
     };
-    console.log(result.message, openaiResponse);
+    // console.log("\n\n");
+    // console.log(result.message, openaiResponse);
   }
 
   const updatedWebsitePrompt = updateWebsitePromptTemplate(result);
@@ -235,13 +282,25 @@ async function main(url) {
     updatedWebsitePrompt
   );
 
-  console.log("Final OpenAI response: ", finalOpenAIResponse);
+  // console.log("\n\nFinal OpenAI response: ", finalOpenAIResponse);
 
   result.finalOpenAIResponse = finalOpenAIResponse;
 
+  const finalResponseObj = JSON.parse(finalOpenAIResponse);
+  if (
+    finalResponseObj &&
+    finalResponseObj.domain &&
+    finalResponseObj.domain.categories
+  ) {
+    finalResponseObj.domain.categories.forEach((category) => {
+      const categoryName = category.name;
+      category["IAB_category"] = findIABCategory(categoryName);
+    });
+    result.finalOpenAIResponse = JSON.stringify(finalResponseObj);
+  }
   return result;
 }
 
-app.listen(port, () => {
-  console.log(`Server is running at http://localhost:${port}`);
+app.listen(port, "0.0.0.0", () => {
+  console.log(`Server is running on port ${port}`);
 });

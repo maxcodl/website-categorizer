@@ -11,15 +11,24 @@
     <form action="/categorize" method="post">
       <label for="url">Enter a URL to categorize:</label><br />
       <input type="text" id="url" name="url" /><br />
-      <input type="submit" value="Submit" />
+      <button type="submit" class="submit-btn">
+        <span>Submit</span>
+        <div class="loading-spinner"></div>
+      </button>
     </form>
 
     <h2>Result:</h2>
     <pre id="result"></pre>
     <script type="module">
-      document.querySelector("form").addEventListener("submit", async (e) => {
+      const form = document.querySelector("form");
+      const submitBtn = form.querySelector(".submit-btn");
+      const spinner = submitBtn.querySelector(".loading-spinner");
+
+      form.addEventListener("submit", async (e) => {
         e.preventDefault();
         const url = document.getElementById("url").value;
+        submitBtn.disabled = true;
+        spinner.style.display = "inline-block";
         const response = await fetch("/categorize", {
           method: "POST",
           headers: {
@@ -33,6 +42,8 @@
           null,
           2
         );
+        submitBtn.disabled = false;
+        spinner.style.display = "none";
       });
     </script>
   </body>
