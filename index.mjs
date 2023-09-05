@@ -85,10 +85,10 @@ function findIABCategory(categoryName) {
   const formattedCategoryName = categoryName.startsWith("/")
     ? categoryName.slice(1)
     : categoryName;
-  const foundCategory = IABData.find(
-    (data) =>
-      data["CATEGORY NAME"].toLowerCase() ===
-      formattedCategoryName.toLowerCase()
+  const foundCategory = IABData.find((data) =>
+    data["CATEGORY NAME"]
+      .toLowerCase()
+      .startsWith(formattedCategoryName.toLowerCase())
   );
   return foundCategory ? foundCategory.VALUE : null;
 }
@@ -116,12 +116,14 @@ async function extractTextFromURL(url) {
 
     const joinedText = extractedTexts.join(" ");
     const trimmedText = joinedText.replace(/\s+/g, " ").trim();
-    // console.log("Extracted text:", trimmedText);
+    console.log("Extracted text:", trimmedText);
     const matchedKeywords = fileKeywords.filter((keyword) => {
       const regex = new RegExp(`\\b${keyword}\\b`, "i");
       return regex.test(trimmedText);
     });
-    // console.log("Matched keywords:", matchedKeywords);
+    console.log("\n\n");
+    console.log("Matched keywords:", matchedKeywords);
+    console.log("\n\n");
     return { text: trimmedText, matchedKeywords };
   } catch (error) {
     if (error.code === "CERT_HAS_EXPIRED") {
@@ -160,10 +162,21 @@ function updatePromptTemplate(url, content) {
 
 async function generateOpenAIResponse(text) {
   try {
-    // console.log("The text sent to OpenAI: ", text);
+    console.log("The text sent to OpenAI: ", text);
     const response = await openaiInstance.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [{ role: "user", content: text }],
+      model: "gpt-3.5-turbo-16k-0613",
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert in website categorization.",
+        },
+        { role: "user", content: text },
+      ],
+      temperature: 1,
+      max_tokens: 100,
+      top_p: 1,
+      frequency_penalty: 0,
+      presence_penalty: 0,
     });
 
     let responseText = "";
@@ -184,9 +197,9 @@ async function generateOpenAIResponse(text) {
 
 async function generateOpenAIResponseforwebsitePrompt(text) {
   try {
-    // console.log("The text sent to OpenAI: ", text);
+    console.log("The text sent to OpenAI: ", text);
     const response = await openaiInstance.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: "gpt-3.5-turbo-0613",
       messages: [
         {
           role: "system",
@@ -219,8 +232,9 @@ async function generateOpenAIResponseforwebsitePrompt(text) {
     ) {
       responseText = response.choices[0].message.content;
     }
-
-    // console.log("OpenAI Response for website prompt: ", responseText);
+    console.log("\n\n");
+    console.log("OpenAI Response for website prompt: ", responseText);
+    console.log("\n\n");
     return responseText;
   } catch (error) {
     console.error("Error generating OpenAI response:", error);
@@ -246,9 +260,9 @@ async function main(url) {
     url
   );
   const keywordCounts = countKeywords(extractedText, matchedKeywords);
-
-  // console.log("\nKeyword counts:", keywordCounts);
-
+  console.log("\n\n");
+  console.log("\nKeyword counts:", keywordCounts);
+  console.log("\n\n");
   const categories = readCategoriesFromFile();
   const matchedCategories = categories.filter((category) =>
     matchedKeywords.includes(category.split("/").pop().split(" & ")[0])
@@ -256,8 +270,10 @@ async function main(url) {
 
   let result;
   if (matchedKeywords.length >= 3 && matchedCategories.length > 0) {
-    // console.log(`\n\nWebsite matched keywords: ${matchedKeywords}`);
-    // console.log(`\n\nWebsite matched categories: ${matchedCategories}`);
+    console.log("\n\n");
+    console.log(`\n\nWebsite matched keywords: ${matchedKeywords}`);
+    console.log("\n\n");
+    console.log(`\n\nWebsite matched categories: ${matchedCategories}`);
     result = {
       url,
       matchedKeywords,
@@ -267,14 +283,14 @@ async function main(url) {
     const updatedPrompt = updatePromptTemplate(url, extractedText);
     const openaiResponse = await generateOpenAIResponse(updatedPrompt);
     const keywordCounts = countKeywords(extractedText, matchedKeywords);
-    // console.log("\n\nKeyword counts:", keywordCounts);
+    console.log("\n\nKeyword counts:", keywordCounts);
     result = {
       url,
       message: "Unable to categorize. OpenAI Response: ",
       openaiResponse,
     };
-    // console.log("\n\n");
-    // console.log(result.message, openaiResponse);
+    console.log("\n\n");
+    console.log(result.message, openaiResponse);
   }
 
   const updatedWebsitePrompt = updateWebsitePromptTemplate(result);
@@ -282,7 +298,7 @@ async function main(url) {
     updatedWebsitePrompt
   );
 
-  // console.log("\n\nFinal OpenAI response: ", finalOpenAIResponse);
+  console.log("\n\nFinal OpenAI response: ", finalOpenAIResponse);
 
   result.finalOpenAIResponse = finalOpenAIResponse;
 
