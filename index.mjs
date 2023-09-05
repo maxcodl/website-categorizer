@@ -162,7 +162,9 @@ function updatePromptTemplate(url, content) {
 
 async function generateOpenAIResponse(text) {
   try {
+    console.log("\n\n");
     console.log("The text sent to OpenAI: ", text);
+    console.log("\n\n");
     const response = await openaiInstance.chat.completions.create({
       model: "gpt-3.5-turbo-16k-0613",
       messages: [
@@ -197,7 +199,9 @@ async function generateOpenAIResponse(text) {
 
 async function generateOpenAIResponseforwebsitePrompt(text) {
   try {
+    console.log("\n\n");
     console.log("The text sent to OpenAI: ", text);
+    console.log("\n\n");
     const response = await openaiInstance.chat.completions.create({
       model: "gpt-3.5-turbo-0613",
       messages: [
@@ -242,6 +246,10 @@ async function generateOpenAIResponseforwebsitePrompt(text) {
   }
 }
 
+function firstXWords(str, count) {
+  return str.split(" ").slice(0, count).join(" ");
+}
+
 function readWebsitePromptFromFile() {
   const filePath = path.join(__dirname, "./files/websitePrompt.json");
   const data = fs.readFileSync(filePath, "utf8");
@@ -249,9 +257,22 @@ function readWebsitePromptFromFile() {
   return promptData.prompt;
 }
 
-function updateWebsitePromptTemplate(inputResult) {
+function updateWebsitePromptTemplate(result, first100Words) {
   let prompt = readWebsitePromptFromFile();
-  prompt = prompt.replace("{{input_result}}", JSON.stringify(inputResult));
+  const parsedUrl = new URL(result.url); // Create a URL object
+  const hostname = parsedUrl.hostname; // Get the hostname part of the URL
+
+  prompt = prompt.replace("{{url}}", JSON.stringify(hostname));
+  prompt = prompt.replace(
+    "{{matched_keywords}}",
+    JSON.stringify(result.matchedKeywords)
+  );
+  prompt = prompt.replace(
+    "{{matched_categories}}",
+    JSON.stringify(result.matchedCategories)
+  );
+  prompt = prompt.replace("{{content}}", JSON.stringify(first100Words));
+
   return prompt;
 }
 
@@ -269,7 +290,7 @@ async function main(url) {
   );
 
   let result;
-  if (matchedKeywords.length >= 3 && matchedCategories.length > 0) {
+  if (matchedKeywords.length >= 4 && matchedCategories.length > 0) {
     console.log("\n\n");
     console.log(`\n\nWebsite matched keywords: ${matchedKeywords}`);
     console.log("\n\n");
@@ -280,7 +301,8 @@ async function main(url) {
       matchedCategories,
     };
   } else {
-    const updatedPrompt = updatePromptTemplate(url, extractedText);
+    const first100Words = firstXWords(extractedText, 100);
+    const updatedPrompt = updatePromptTemplate(url, first100Words);
     const openaiResponse = await generateOpenAIResponse(updatedPrompt);
     const keywordCounts = countKeywords(extractedText, matchedKeywords);
     console.log("\n\nKeyword counts:", keywordCounts);
@@ -293,7 +315,11 @@ async function main(url) {
     console.log(result.message, openaiResponse);
   }
 
-  const updatedWebsitePrompt = updateWebsitePromptTemplate(result);
+  const first100Words = firstXWords(extractedText, 100);
+  const updatedWebsitePrompt = updateWebsitePromptTemplate(
+    result,
+    first100Words
+  );
   const finalOpenAIResponse = await generateOpenAIResponseforwebsitePrompt(
     updatedWebsitePrompt
   );
